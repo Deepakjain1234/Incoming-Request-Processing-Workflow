@@ -45,7 +45,7 @@ for env_line in (Path(__file__).resolve().parent / ".env").read_text().splitline
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "https://knowlageking-3505-resource.cognitiveservices.azure.com/")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "HBRWlAlPsJMJ6R9EthwVdu009ReYl2ExGFYkzg5L5V6ENHvTikeeJQQJ99CGACHYHv6XJ3w3AAAAACOGsJl2")
 # Timeout for Logic App HTTP requests (seconds). Default 1 hour.
 LOGIC_APP_TIMEOUT = int(os.getenv("LOGIC_APP_TIMEOUT", str(60 * 60)))
 COMPLAINT_LOGIC_APP_URL = os.getenv(
