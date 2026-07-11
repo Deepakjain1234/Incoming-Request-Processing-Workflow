@@ -8,7 +8,7 @@ PASSWORD = "Deep@132"
 PORT = 1433
 
 connection_string = (
-    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+    f"DRIVER={{ODBC Driver 17 for SQL Server}};"
     f"SERVER={SERVER},{PORT};"
     f"DATABASE={DATABASE};"
     f"UID={USERNAME};"
