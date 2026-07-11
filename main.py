@@ -40,15 +40,40 @@ st.sidebar.markdown("- Use the Streamlit page selector to open **Support Dashboa
 
 st.info("Navigate to the Support Dashboard page via Streamlit pages to review persisted records.")
 
-for env_line in (Path(__file__).resolve().parent / ".env").read_text().splitlines() if (Path(__file__).resolve().parent / ".env").exists() else []:
-    if "=" in env_line and not env_line.startswith("#"):
-        key, value = env_line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "https://knowlageking-3505-resource.cognitiveservices.azure.com/")
-AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "HBRWlAlPsJMJ6R9EthwVdu009ReYl2ExGFYkzg5L5V6ENHvTikeeJQQJ99CGACHYHv6XJ3w3AAAAACOGsJl2")
+def get_config(key, default=""):
+    """
+    Priority:
+    1. Streamlit Cloud Secrets
+    2. Local .env
+    3. Default value
+    """
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+
+    return os.getenv(key, default)
+
+
+# Azure OpenAI Configuration
+AZURE_OPENAI_ENDPOINT = get_config(
+    "AZURE_OPENAI_ENDPOINT",
+    "https://knowlageking-3505-resource.cognitiveservices.azure.com/",
+)
+
+AZURE_OPENAI_DEPLOYMENT = get_config(
+    "AZURE_OPENAI_DEPLOYMENT",
+    "gpt-5-mini",
+)
+
+AZURE_OPENAI_API_VERSION = get_config(
+    "AZURE_OPENAI_API_VERSION",
+    "2024-12-01-preview",
+)
+
+AZURE_OPENAI_API_KEY = get_config("AZURE_OPENAI_API_KEY")
 # Timeout for Logic App HTTP requests (seconds). Default 1 hour.
 LOGIC_APP_TIMEOUT = int(os.getenv("LOGIC_APP_TIMEOUT", str(60 * 60)))
 COMPLAINT_LOGIC_APP_URL = os.getenv(
@@ -74,20 +99,29 @@ RESOLUTION_LOGIC_APP_URL = os.getenv(
 )
 
 client = None
-if AZURE_OPENAI_API_KEY:
-    client = AzureOpenAI(
-        api_version=AZURE_OPENAI_API_VERSION,
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        api_key=AZURE_OPENAI_API_KEY,
-    )
+
+try:
+    if AZURE_OPENAI_API_KEY:
+        client = AzureOpenAI(
+            api_version=AZURE_OPENAI_API_VERSION,
+            azure_endpoint=AZURE_OPENAI_ENDPOINT,
+            api_key=AZURE_OPENAI_API_KEY,
+        )
+except Exception as e:
+    st.error(f"Failed to initialize Azure OpenAI: {e}")
 
 missing_config = []
-if not AZURE_OPENAI_ENDPOINT:
-    missing_config.append("AZURE_OPENAI_ENDPOINT")
-if not AZURE_OPENAI_DEPLOYMENT:
-    missing_config.append("AZURE_OPENAI_DEPLOYMENT")
-if not AZURE_OPENAI_API_KEY:
-    missing_config.append("AZURE_OPENAI_API_KEY")
+
+required = {
+    "AZURE_OPENAI_ENDPOINT": AZURE_OPENAI_ENDPOINT,
+    "AZURE_OPENAI_DEPLOYMENT": AZURE_OPENAI_DEPLOYMENT,
+    "AZURE_OPENAI_API_VERSION": AZURE_OPENAI_API_VERSION,
+    "AZURE_OPENAI_API_KEY": AZURE_OPENAI_API_KEY,
+}
+
+for key, value in required.items():
+    if not value:
+        missing_config.append(key)
 
 
 def build_logic_app_payload(
