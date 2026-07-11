@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import streamlit as st
 from openai import AzureOpenAI
