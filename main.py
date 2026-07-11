@@ -440,11 +440,7 @@ class RequestAgent:
         "API Key Present": bool(AZURE_OPENAI_API_KEY),
     }
 )
-
-
-
-
-if (
+        if (
     LANGCHAIN_READY
     and AzureChatOpenAI
     and AgentExecutor
@@ -452,6 +448,11 @@ if (
     and ChatPromptTemplate
     and self.client
 ):
+
+
+
+
+
 
     try:
         llm = AzureChatOpenAI(
