@@ -426,8 +426,7 @@ class RequestAgent:
         }
         st.write("## Azure / LangChain Debug")
 
-
-st.json(
+        st.json(
     {
         "LANGCHAIN_READY": LANGCHAIN_READY,
         "AzureChatOpenAI": AzureChatOpenAI is not None,
@@ -441,6 +440,9 @@ st.json(
         "API Key Present": bool(AZURE_OPENAI_API_KEY),
     }
 )
+
+
+
 
 if (
     LANGCHAIN_READY
