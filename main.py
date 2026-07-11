@@ -5,9 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from dotenv import load_dotenv
-
-load_dotenv()
 
 import streamlit as st
 from openai import AzureOpenAI
@@ -17,17 +14,7 @@ try:
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.tools import tool
     from langchain_openai import AzureChatOpenAI
-
-    LANGCHAIN_READY = True
-
-except Exception as e:
-    LANGCHAIN_READY = False
-
-    import traceback
-
-    st.error("❌ LangChain Import Failed")
-    st.code(traceback.format_exc())
-
+except ImportError:  # pragma: no cover - fallback if dependency is not installed yet
     def tool(*args, **kwargs):
         def decorator(func):
             func.langchain_tool = True
@@ -40,56 +27,25 @@ except Exception as e:
     ChatPromptTemplate = None
     AzureChatOpenAI = None
 
-st.set_page_config(
-    page_title="LangChain Request Orchestrator", page_icon="🤖", layout="wide"
-)
+st.set_page_config(page_title="LangChain Request Orchestrator", page_icon="🤖", layout="wide")
 
 if "requests" not in st.session_state:
     st.session_state.requests = []
 
 st.sidebar.markdown("### Navigation")
-st.sidebar.markdown(
-    "- Use the Streamlit page selector to open **Support Dashboard** and view all stored database records."
-)
+st.sidebar.markdown("- Use the Streamlit page selector to open **Support Dashboard** and view all stored database records.")
 
-st.info(
-    "Navigate to the Support Dashboard page via Streamlit pages to review persisted records."
-)
+st.info("Navigate to the Support Dashboard page via Streamlit pages to review persisted records.")
 
+for env_line in (Path(__file__).resolve().parent / ".env").read_text().splitlines() if (Path(__file__).resolve().parent / ".env").exists() else []:
+    if "=" in env_line and not env_line.startswith("#"):
+        key, value = env_line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
-def get_config(key, default=""):
-    """
-    Priority:
-    1. Streamlit Cloud Secrets
-    2. Local .env
-    3. Default value
-    """
-    try:
-        if key in st.secrets:
-            return st.secrets[key]
-    except Exception:
-        pass
-
-    return os.getenv(key, default)
-
-
-# Azure OpenAI Configuration
-AZURE_OPENAI_ENDPOINT = get_config(
-    "AZURE_OPENAI_ENDPOINT",
-    "https://knowlageking-3505-resource.cognitiveservices.azure.com/",
-)
-
-AZURE_OPENAI_DEPLOYMENT = get_config(
-    "AZURE_OPENAI_DEPLOYMENT",
-    "gpt-5-mini",
-)
-
-AZURE_OPENAI_API_VERSION = get_config(
-    "AZURE_OPENAI_API_VERSION",
-    "2024-12-01-preview",
-)
-
-AZURE_OPENAI_API_KEY = get_config("AZURE_OPENAI_API_KEY")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "https://knowlageking-3505-resource.cognitiveservices.azure.com/")
+AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "HBRWlAlPsJMJ6R9EthwVdu009ReYl2ExGFYkzg5L5V6ENHvTikeeJQQJ99CGACHYHv6XJ3w3AAAAACOGsJl2")
 # Timeout for Logic App HTTP requests (seconds). Default 1 hour.
 LOGIC_APP_TIMEOUT = int(os.getenv("LOGIC_APP_TIMEOUT", str(60 * 60)))
 COMPLAINT_LOGIC_APP_URL = os.getenv(
@@ -115,29 +71,20 @@ RESOLUTION_LOGIC_APP_URL = os.getenv(
 )
 
 client = None
-
-try:
-    if AZURE_OPENAI_API_KEY:
-        client = AzureOpenAI(
-            api_version=AZURE_OPENAI_API_VERSION,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_key=AZURE_OPENAI_API_KEY,
-        )
-except Exception as e:
-    st.error(f"Failed to initialize Azure OpenAI: {e}")
+if AZURE_OPENAI_API_KEY:
+    client = AzureOpenAI(
+        api_version=AZURE_OPENAI_API_VERSION,
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        api_key=AZURE_OPENAI_API_KEY,
+    )
 
 missing_config = []
-
-required = {
-    "AZURE_OPENAI_ENDPOINT": AZURE_OPENAI_ENDPOINT,
-    "AZURE_OPENAI_DEPLOYMENT": AZURE_OPENAI_DEPLOYMENT,
-    "AZURE_OPENAI_API_VERSION": AZURE_OPENAI_API_VERSION,
-    "AZURE_OPENAI_API_KEY": AZURE_OPENAI_API_KEY,
-}
-
-for key, value in required.items():
-    if not value:
-        missing_config.append(key)
+if not AZURE_OPENAI_ENDPOINT:
+    missing_config.append("AZURE_OPENAI_ENDPOINT")
+if not AZURE_OPENAI_DEPLOYMENT:
+    missing_config.append("AZURE_OPENAI_DEPLOYMENT")
+if not AZURE_OPENAI_API_KEY:
+    missing_config.append("AZURE_OPENAI_API_KEY")
 
 
 def build_logic_app_payload(
@@ -252,7 +199,7 @@ def invoke_logic_app(logic_app_url: str, payload: Dict[str, Any]) -> Dict[str, A
         return {
             "status": "error",
             "http_status": None,
-            "body": f"Request to Logic App timed out: {exc}",
+                "body": f"Request to Logic App timed out: {exc}",
         }
     except Exception as exc:  # pragma: no cover - defensive fallback
         return {
@@ -263,21 +210,9 @@ def invoke_logic_app(logic_app_url: str, payload: Dict[str, Any]) -> Dict[str, A
 
 
 @tool
-def complaint_request_tool(
-    query: str,
-    name: str = "",
-    email: str = "",
-    contact: str = "",
-    support_agent_email: str = "deepak.passrid@gmail.com",
-) -> Dict[str, object]:
+def complaint_request_tool(query: str, name: str = "", email: str = "", contact: str = "", support_agent_email: str = "deepak.passrid@gmail.com") -> Dict[str, object]:
     """Use this tool for complaints, billing disputes, refund issues, or dissatisfied customer feedback. It sends the request to the Complaint Logic App workflow and assigns a high-priority response path."""
-    payload = build_logic_app_payload(
-        name=name,
-        email=email,
-        contact=contact,
-        query=query,
-        support_agent_email=support_agent_email,
-    )
+    payload = build_logic_app_payload(name=name, email=email, contact=contact, query=query, support_agent_email=support_agent_email)
     logic_app_response = invoke_logic_app(COMPLAINT_LOGIC_APP_URL, payload)
     print(logic_app_response)
     return {
@@ -300,13 +235,7 @@ def complaint_request_tool(
 
 
 @tool
-def service_request_tool(
-    query: str,
-    name: str = "",
-    email: str = "",
-    contact: str = "",
-    support_agent_email: str = "deepak.passrid@gmail.com",
-) -> Dict[str, object]:
+def service_request_tool(query: str, name: str = "", email: str = "", contact: str = "", support_agent_email: str = "deepak.passrid@gmail.com") -> Dict[str, object]:
     """Use this tool for service requests, change requests, orders, upgrades, or activation requests. It routes the request to the relevant department through the Service Request Logic App workflow."""
     payload = build_logic_app_payload(
         name=name,
@@ -424,113 +353,53 @@ class RequestAgent:
             "Escalation Handler": escalation_request_tool,
             "General Enquiry Handler": general_enquiry_tool,
         }
-        st.write("## Azure / LangChain Debug")
 
-        st.json(
-    {
-        "LANGCHAIN_READY": LANGCHAIN_READY,
-        "AzureChatOpenAI": AzureChatOpenAI is not None,
-        "AgentExecutor": AgentExecutor is not None,
-        "create_tool_calling_agent": create_tool_calling_agent is not None,
-        "ChatPromptTemplate": ChatPromptTemplate is not None,
-        "Azure Client": self.client is not None,
-        "Endpoint": AZURE_OPENAI_ENDPOINT,
-        "Deployment": AZURE_OPENAI_DEPLOYMENT,
-        "API Version": AZURE_OPENAI_API_VERSION,
-        "API Key Present": bool(AZURE_OPENAI_API_KEY),
-    }
-)
-        if (
-    LANGCHAIN_READY
-    and AzureChatOpenAI
-    and AgentExecutor
-    and create_tool_calling_agent
-    and ChatPromptTemplate
-    and self.client
-):
-
-
-
-
-
-
-    try:
-        llm = AzureChatOpenAI(
-            azure_deployment=AZURE_OPENAI_DEPLOYMENT,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_API_VERSION,
-            temperature=1,
-        )
-
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "You are a helpful request-routing agent. Always use exactly one tool.",
-                ),
-                ("human", "{input}"),
-                ("placeholder", "{agent_scratchpad}"),
-            ]
-        )
-
-        agent = create_tool_calling_agent(
-            llm,
-            self.tools,
-            prompt,
-        )
-
-        self.executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            return_intermediate_steps=True,
-        )
-
-        st.success("✅ LangChain Agent Initialized Successfully")
-
-    except Exception as e:
-        import traceback
-
-        st.error("❌ Failed to create LangChain Agent")
-        st.code(traceback.format_exc())
-
-        self.executor = None
-
-else:
-    st.error("❌ LangChain prerequisites not satisfied.")
-
-    def process_request(
-        self,
-        query: str,
-        name: str,
-        email: str,
-        contact: str,
-        support_agent_email: str = "deepak.passrid@gmail.com",
-    ) -> Dict[str, Any]:
-        if self.executor is None:
-            st.error("Executor is None")
-            st.json(
-                {
-                    "LANGCHAIN_READY": LANGCHAIN_READY,
-                    "AzureChatOpenAI": AzureChatOpenAI is not None,
-                    "AgentExecutor": AgentExecutor is not None,
-                    "create_tool_calling_agent": create_tool_calling_agent is not None,
-                    "ChatPromptTemplate": ChatPromptTemplate is not None,
-                    "Client": self.client is not None,
-                    "Endpoint": bool(AZURE_OPENAI_ENDPOINT),
-                    "Deployment": bool(AZURE_OPENAI_DEPLOYMENT),
-                    "API Version": bool(AZURE_OPENAI_API_VERSION),
-                    "API Key": bool(AZURE_OPENAI_API_KEY),
-                }
+        if AzureChatOpenAI is not None and AgentExecutor is not None and create_tool_calling_agent is not None and self.client is not None:
+            llm = AzureChatOpenAI(
+                azure_deployment=self.deployment,
+                api_version=AZURE_OPENAI_API_VERSION,
+                azure_endpoint=AZURE_OPENAI_ENDPOINT,
+                api_key=AZURE_OPENAI_API_KEY,
+                temperature=1,
             )
-            raise RuntimeError("Agent initialization failed.")
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        "You are a helpful request-routing agent. Use exactly one of the "
+                        "provided tools to process the customer request, then simply confirm "
+                        "that you have done so in one short sentence. Do not attempt to repeat, "
+                        "reformat, or summarize the tool's JSON output yourself — the caller "
+                        "reads the tool's raw return value directly, not your reply.",
+                    ),
+                    ("human", "{input}"),
+                    ("placeholder", "{agent_scratchpad}"),
+                ]
+            )
+            agent = create_tool_calling_agent(llm, self.tools, prompt)
+            # Disable verbose to avoid StdOutCallbackHandler callback errors.
+            # return_intermediate_steps=True is the key fix: it lets us read the
+            # tool's *actual* return value (including the full logic_app_response
+            # with the real Logic App body/headers) instead of trusting the LLM to
+            # faithfully retype that JSON in its final answer, which it doesn't.
+            self.executor = AgentExecutor(
+                agent=agent,
+                tools=self.tools,
+                verbose=False,
+                return_intermediate_steps=True,
+            )
 
-        response = self.executor.invoke(
-            {
-                "input": f"Customer Name: {name}\nEmail: {email}\nContact: {contact}\nQuery: {query}",
-            }
-        )
+    def process_request(self, query: str, name: str, email: str, contact: str, support_agent_email: str = "deepak.passrid@gmail.com") -> Dict[str, Any]:
+        if self.executor is None:
+            missing = ", ".join(missing_config) if missing_config else "required Azure settings"
+            raise RuntimeError(
+                "Azure OpenAI or LangChain agent dependencies are not configured. Please set the Azure values before processing requests. Missing: "
+                + missing
+            )
+
+        response = self.executor.invoke({
+            "input": f"Customer Name: {name}\nEmail: {email}\nContact: {contact}\nQuery: {query}",
+        })
 
         # --- Primary path: read the tool's real output straight from the agent's
         # intermediate steps. This is the actual dict the tool function returned
@@ -567,11 +436,7 @@ else:
                 parsed_output = None
 
         if isinstance(parsed_output, dict):
-            selected_tool = (
-                parsed_output.get("tool_name")
-                or parsed_output.get("selected_tool")
-                or "unknown"
-            )
+            selected_tool = parsed_output.get("tool_name") or parsed_output.get("selected_tool") or "unknown"
             if selected_tool in self.tool_lookup:
                 full_result = self.tool_lookup[selected_tool].invoke(
                     {
@@ -601,9 +466,7 @@ else:
 agent = RequestAgent()
 
 st.title("LangChain AI Request Processing System")
-st.caption(
-    "One agent routes the request to the correct Logic App-backed workflow tool."
-)
+st.caption("One agent routes the request to the correct Logic App-backed workflow tool.")
 
 if missing_config:
     st.warning(
@@ -616,36 +479,22 @@ with st.form("request_form"):
     name = st.text_input("Name")
     email = st.text_input("Email")
     contact = st.text_input("Contact")
-    query = st.text_area(
-        "Query", placeholder="Describe your request, complaint, or service need here..."
-    )
-    support_agent_email = st.text_input(
-        "Customer Support Agent Email", value="deepak.passrid@gmail.com"
-    )
-    st.caption(
-        "Please change the support email to test the complete flow; otherwise the default value will be used."
-    )
+    query = st.text_area("Query", placeholder="Describe your request, complaint, or service need here...")
+    support_agent_email = st.text_input("Customer Support Agent Email", value="deepak.passrid@gmail.com")
+    st.caption("Please change the support email to test the complete flow; otherwise the default value will be used.")
     submitted = st.form_submit_button("Process request")
 
 if submitted:
     if not name or not email or not query:
-        st.error(
-            "Please provide a name, email address, and request details before processing."
-        )
+        st.error("Please provide a name, email address, and request details before processing.")
         st.stop()
 
     case_id = f"REQ-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    st.info(
-        "Please wait — processing your request. The Logic App can take a few minutes to respond."
-    )
-    with st.spinner(
-        "Agent is choosing the workflow tool and invoking the Logic App — this may take a few minutes..."
-    ):
+    st.info("Please wait — processing your request. The Logic App can take a few minutes to respond.")
+    with st.spinner("Agent is choosing the workflow tool and invoking the Logic App — this may take a few minutes..."):
         try:
-            result = agent.process_request(
-                query, name, email, contact, support_agent_email
-            )
+            result = agent.process_request(query, name, email, contact, support_agent_email)
         except Exception as exc:
             st.error(str(exc))
             st.stop()
@@ -656,27 +505,23 @@ if submitted:
         result.setdefault("tool_name", result.get("selected_tool", "unknown"))
         result.setdefault("critical_level", result.get("critical_level", "Medium"))
         result.setdefault("routing", result.get("routing", "Unknown"))
-        result.setdefault(
-            "classification", result.get("classification", "Unclassified")
-        )
+        result.setdefault("classification", result.get("classification", "Unclassified"))
         result.setdefault("steps", result.get("steps", []))
         result.setdefault("logic_app_url", result.get("logic_app_url", ""))
         result.setdefault("status", result.get("status", "Pending"))
 
-    result.update(
-        {
-            "case_id": case_id,
-            "request_id": result.get("logic_app_payload", {}).get("request_id", ""),
-            "customer_name": name,
-            "email": email,
-            "contact": contact,
-            "request": query,
-            "support_agent_email": support_agent_email or "deepak.passrid@gmail.com",
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-    )
+    result.update({
+        "case_id": case_id,
+        "request_id": result.get("logic_app_payload", {}).get("request_id", ""),
+        "customer_name": name,
+        "email": email,
+        "contact": contact,
+        "request": query,
+        "support_agent_email": support_agent_email or "deepak.passrid@gmail.com",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
 
     st.session_state.requests.append(result)
 
@@ -685,17 +530,12 @@ if submitted:
     st.markdown("### Agent outcome")
     col_a, col_b = st.columns(2)
     with col_a:
-        st.metric(
-            "Selected tool",
-            result.get("tool_name", result.get("selected_tool", "unknown")),
-        )
+        st.metric("Selected tool", result.get("tool_name", result.get("selected_tool", "unknown")))
     with col_b:
         st.metric("Critical level", result.get("critical_level", "Medium"))
 
     st.markdown("### Confirmation")
-    st.info(
-        "Your request has been submitted successfully. You will receive a confirmation email soon."
-    )
+    st.info("Your request has been submitted successfully. You will receive a confirmation email soon.")
 
     logic_app_response = result.get("logic_app_response", {})
     if isinstance(logic_app_response, dict) and logic_app_response:
@@ -726,34 +566,22 @@ if submitted:
                 else:
                     st.text_area("Returned response", payload_body, height=220)
             else:
-                st.info(
-                    "Logic App returned an empty body. The workflow may be processing asynchronously and will complete shortly."
-                )
+                st.info("Logic App returned an empty body. The workflow may be processing asynchronously and will complete shortly.")
                 # Offer a retry to fetch any eventual response
                 if st.button("Retry fetching Logic App response"):
                     retry_url = result.get("logic_app_url") or ""
                     if retry_url:
                         with st.spinner("Re-invoking Logic App to fetch response..."):
-                            retry_payload = build_logic_app_payload(
-                                name, email, contact, query, support_agent_email
-                            )
+                            retry_payload = build_logic_app_payload(name, email, contact, query, support_agent_email)
                             retry_resp = invoke_logic_app(retry_url, retry_payload)
-                            st.write(
-                                "Retry HTTP status:", retry_resp.get("http_status")
-                            )
-                            if (
-                                retry_resp.get("body_is_json")
-                                and isinstance(retry_resp.get("body"), dict)
-                                and "response" in retry_resp.get("body")
-                            ):
+                            st.write("Retry HTTP status:", retry_resp.get("http_status"))
+                            if retry_resp.get("body_is_json") and isinstance(retry_resp.get("body"), dict) and "response" in retry_resp.get("body"):
                                 st.success(retry_resp.get("body").get("response"))
                             else:
                                 st.write(retry_resp.get("body") or retry_resp)
         else:
             if logic_app_response.get("http_status") == 401:
-                st.error(
-                    "The Logic App endpoint rejected the request because the invoke URL or SAS signature is invalid. Please update the service Logic App URL and try again."
-                )
+                st.error("The Logic App endpoint rejected the request because the invoke URL or SAS signature is invalid. Please update the service Logic App URL and try again.")
             else:
                 # Show the raw body if available
                 if isinstance(payload_body, str):
@@ -773,19 +601,12 @@ if submitted:
             st.json(result["logic_app_payload"])
 
     with st.expander("Execution details"):
-        sanitized = {
-            k: v
-            for k, v in result.items()
-            if k
-            not in {"logic_app_url", "steps", "draft_response", "status", "routing"}
-        }
+        sanitized = {k: v for k, v in result.items() if k not in {"logic_app_url", "steps", "draft_response", "status", "routing"}}
         st.json(sanitized)
 
 st.markdown("---")
 st.subheader("Recent processed requests (session)")
-st.info(
-    "For full request tracking with filtering and resolution management, go to **Request History** page."
-)
+st.info("For full request tracking with filtering and resolution management, go to **Request History** page.")
 
 if st.session_state.requests:
     for item in reversed(st.session_state.requests):
